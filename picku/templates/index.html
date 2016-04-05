@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Picku!</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta charset="UTF-8">
+        <script src="//code.jquery.com/jquery-1.12.0.min.js"></script>
+        <script src="//code.jquery.com/jquery-migrate-1.2.1.min.js"></script>
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonym ous">
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap-theme.min.css" integrity="sha384-fLW2N01lMqjakBkx3l/M9EahuwpSfeNvV63J5ezn3uZzapT0u7EYsXMjQV+0En5r" crossorigin=" anonymous">
+        <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
+    </head>
+    <body>
+    <div class="container">
+    <div class="page-header">
+        <h1>Picku message steeler</h1>
+        <p class="lead">Listens to messages and sends them again.</p>
+      </div>
+        <div class="row" id="ractive-container"></div>
+    </div>
+    </body>
+
+    <script id="template" type="text/ractive">
+      {% raw %}
+      <div class="col-md-3">
+        <ul class="nav nav-pills nav-stacked">
+        {{#each routing_keys}}
+            <li role="presentation" {{#if this.key == routing_key.key}}class="active"{{/if}} style="cursor: pointer;">
+              <a on-click="routing_key_selected:{{this}}">
+                {{this.key}} {{#if this.items != (seen[this.key] || 0) }}<span class="badge">{{ this.items - (seen[this.key] || 0) }}</span>{{/if}}
+              </a>
+            </li>
+        {{/each}}
+
+        </ul>
+      </div>
+      <div class="col-md-9">
+        {{#each messages:i}}
+          <div class="panel panel-default" id="{{ this.id }}">
+            <div class="panel-heading">{{ this.ts }} | Message {{ i + 1 }}/{{ messages.length }} | <a style="cursor: pointer;" on-click="publish:{{this.id}}">Publish again</a></div>
+          <div class="panel-body">
+            <p>
+              {{#each this.body}}
+               <strong>{{@key}}:</strong> {{this}}<br/>
+              {{/each}}
+            </p>
+          </div>
+        </div>
+        {{/each}}
+      </div>
+      {% endraw %}
+    </script>
+
+    <script src="http://cdn.ractivejs.org/latest/ractive.min.js"></script>
+
+    <script>
+      var running = false;
+
+      var ractive = new Ractive({
+          el: "#ractive-container",
+          template: "#template",
+          data: {
+            routing_keys: [],
+            routing_key: "",
+            messages: [],
+            seen: {},
+            new_messages: 0
+          }
+        });
+
+        ractive.on("routing_keys", function (event) {
+          $.getJSON("routing_keys", function( data ) {
+            ractive.set("routing_keys", data.routing_keys);
+            ractive.fire("routing_keys_refreshed");
+            running = true;
+          });
+        });
+
+        ractive.on("publish", function (event, id) {
+          $.getJSON("publish/" + id, function( data ) { });
+        });
+
+        ractive.on("routing_keys_refreshed", function (event) {
+          var keys = ractive.get("routing_keys");
+          var key = ractive.get("routing_key");
+
+          if (keys.length == 0) {
+            ractive.set("messages", []);
+            return
+          }
+
+          if (key == "") {
+            var key = keys[0];
+            ractive.set("routing_key", key.key);
+            for (var i = 0; i < keys.length; i++){
+              ractive.set("seen." + keys[i].key, 0);
+            }
+          }
+
+          ractive.fire("routing_key_selected", {}, key);
+        });
+
+        ractive.on("routing_key_selected", function (event, routing_key) {
+          $.getJSON( "messages/" + routing_key.key, function( data ) {
+            ractive.set("messages", data.messages);
+            ractive.set("routing_key", routing_key);
+            ractive.set("seen." + routing_key.key, routing_key.items);
+          });
+        });
+
+      ractive.fire("routing_keys");
+
+      (function(){
+        if (running) {
+          ractive.fire("routing_keys");
+          ractive.update();
+        }
+        setTimeout(arguments.callee, 1000);
+      })();
+
+    </script>
+</html>

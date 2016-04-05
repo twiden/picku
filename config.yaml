@@ -1,0 +1,7 @@
+exchange: 'twiden'
+exchange_type: 'topic'
+queue: ''
+routing_key: '*'
+host: 'localhost'
+
+
